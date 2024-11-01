@@ -1,5 +1,5 @@
 #!/bin/bash
-
+#teste de alteracoes
 # Verifica se dir_trabalho e dir_backup foram passadas (tem de existir 2 argumentos no mínimo)
 if [ $# -lt 2 ]; then
     echo "Usage: $0 [-c] <dir_trabalho> <dir_backup>"
