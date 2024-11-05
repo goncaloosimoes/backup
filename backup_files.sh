@@ -1,8 +1,22 @@
 #!/bin/bash
-# Verifica se dir_trabalho e dir_backup foram passadas (tem de existir 2 argumentos no mínimo)
-if [ $# -lt 2 ]; then
-    echo "Usage: $0 [-c] <dir_trabalho> <dir_backup>"
+
+# Contadores
+errors=0
+warnings=0
+updated=0
+copied=0
+deleted=0
+total_bytes=0
+
+# Função para exibir a mensagem de uso
+usage() {
+    echo "Uso: $0 [-c] [-b tfile] [-r regexpr] <dir_trabalho> <dir_backup>"
     exit 1
+}
+
+# Verifica se dir_trabalho e dir_backup foram passadas
+if [ $# -lt 2 ]; then
+    usage
 fi
 
 # Variável para o modo de CHECKING
@@ -21,6 +35,7 @@ dir_backup=$2
 # Se a diretoria de trabalho não existir o programa acaba
 if [ ! -d "$dir_trabalho" ]; then
     echo "ERROR: $dir_trabalho does not exist"
+    ((errors++))
     exit 1
 fi
 
@@ -33,14 +48,6 @@ if [ ! -d "$dir_backup" ]; then
         mkdir "$dir_backup"
     fi
 fi
-
-# Contadores
-errors=0
-warnings=0
-updated=0
-copied=0
-deleted=0
-total_bytes=0
 
 # Função para copiar cada ficheiro de uma diretoria de origem para uma diretoria de destino
 copy_file() {
@@ -72,7 +79,6 @@ copy_file() {
         ((total_bytes+=file_size))  # Soma ao total de bytes copiados
     fi
 }
-
 
 shopt -s nullglob  # Para que o loop não inicie se não houver arquivos no diretório de trabalho
 # Loop pelos ficheiros no diretório de trabalho
