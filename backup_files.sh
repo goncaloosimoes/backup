@@ -80,7 +80,9 @@ copy_file() {
     fi
 }
 
-shopt -s nullglob  # Para que o loop não inicie se não houver arquivos no diretório de trabalho
+# Para que o loop não inicie se não houver arquivos no diretório de trabalho
+shopt -s nullglob
+
 # Loop pelos ficheiros no diretório de trabalho
 for file in "$dir_trabalho"/*; do
     filename=$(basename "$file")
