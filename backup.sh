@@ -28,8 +28,8 @@ REGEX=""
 while getopts ":cb:r:" opt; do
     case $opt in
         c) CHECKING=true ;;
-        b) IGNORE_FILE="$OPTARG" ;;
-        r) REGEX="$OPTARG" ;;
+        b) IGNORE_FILE="$OPTARG" ;; # Lista de ficheiros a serem ignorados
+        r) REGEX="$OPTARG" ;; # Expressão regular
         *) usage ;;
     esac
 done
@@ -85,8 +85,23 @@ copy_item() {
         return
     fi
 
-    # Verifica se a expressão regular foi definida e se o item não corresponde
-    if [[ -n "$REGEX" && ! "$(basename "$src_item")" =~ $REGEX ]]; then
+    # Verifica se a expressão regular foi definida e é válida
+    if [[ -z "$REGEX" ]]; then
+        echo "Invalid Regular Expression: REGEX is not set"
+        ((errors++))
+        return
+    fi
+
+    # Testa se o REGEX é válido usando o grep
+    echo "" | grep -E "$REGEX" >/dev/null 2>&1
+    if [[ $? -ne 0 ]]; then
+        echo "Invalid Regular Expression: '$REGEX' is not a valid regex"
+        ((errors++))
+        return
+    fi
+
+    # Verifica se o item não corresponde ao REGEX
+    if ! echo "$(basename "$src_item")" | grep -qE "$REGEX"; then
         echo "Skipping $src_item due to regex filter"
         return
     fi
@@ -100,15 +115,11 @@ copy_item() {
 
         # Loop para copiar todos os itens dentro do diretório
         for item in "$src_item"/*; do
-            # Ignora arquivos ocultos
-            if [[ "$item" != .* ]]; then
-                copy_item "$item" "$dest_item/$(basename "$item")"
-            fi
+            copy_item "$item" "$dest_item/$(basename "$item")"
         done
     else
         # Trata arquivos
         echo "cp -a \"$src_item\" \"$dest_item\""
-        
         # Executa a cópia se CHECKING for false
         if [ "$CHECKING" = false ]; then
             if cp -a "$src_item" "$dest_item"; then
