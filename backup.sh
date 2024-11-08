@@ -76,9 +76,8 @@ should_ignore() {
 
 # Função para copiar arquivos e diretórios recursivamente
 copy_item() {
-    local var = "$@"
-    local src_item= "${var[0]}"
-    local dest_item= "${var[1]}"
+    local src_item= "$1"
+    local dest_item= "$2"
 
     # Verifica se o item deve ser ignorado
     if should_ignore "$src_item"; then
