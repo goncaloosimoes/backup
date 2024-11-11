@@ -8,10 +8,8 @@ copied=0
 deleted=0
 total_bytes=0
 
-# Função para exibir a mensagem de modo de uso
 usage() {
-    echo "Utilizacao: $0 [-c] [-b tfile] [-r regexpr] <dir_trabalho> <dir_backup> "
-    
+    echo "Utilizacao: $0 [-c] [-b tfile] [-r regexpr] <dir_trabalho> <dir_backup> "  
 }
 
 # Variáveis para o modo de CHECKING (-c), arquivo de ignorados(-b) e expressão regular(-r)
@@ -19,15 +17,36 @@ CHECKING=false
 IGNORE_FILE=""
 REGEX=""
 
-# Processa as opções da linha de comando 
-while getopts ":cb:r:" opt; do
+while getopts ":cb:r:" opt; do #opt process
     case $opt in
         c) CHECKING=true;;
 
-        b) IGNORE_FILE="$OPTARG";; # Verificaçao e Preparaçao da Lista de ficheiros a serem ignorados
+        b) IGNORE_FILE="$OPTARG" # Verificaçao e Preparaçao da Lista de ficheiros a serem ignorados
         #verificar se tem ficheiro , se este e valido e colocar nomes em array prontos a usar na main
+        should_ignore() {
+                local path="$1"
+                for ignore in "${ignore_paths[@]}"; do
+                    if [[ "$path" == $ignore ]]; then
+                        return 0  # Ignorar
+                    fi
+                done
+                return 1  # Não ignorar
+            };;
         r) REGEX="$OPTARG" ;; # Expressão regular
-        #verificar se regex é valido 
+                    # Verifica se a expressão regular foi definida e é válida
+            if [[ -z "$REGEX" ]]; then
+                echo "Invalid Regular Expression: REGEX is not set"
+                ((errors++))
+                return
+            fi
+            # Testa se o REGEX é válido usando o grep
+            echo "" | grep -E "$REGEX" >/dev/null 2>&1
+            if [[ $? -ne 0 ]]; then
+                echo "Invalid Regular Expression: '$REGEX' is not a valid regex"
+                ((errors++))
+                return
+            fi
+ 
         ?) usage 
         exit 1;;
     esac
@@ -35,12 +54,19 @@ done
 # Remove as opções processadas
 shift $((OPTIND - 1))
 
-#verificadiretoria funcao criar____
-
+#verficia se a diretoria é vialida
+VerificaDir() {
+    dir_trabalho="$1"
+    if [ ! -d "$dir_trabalho" ]; then
+        ((errors++))
+        return 0
+    fi
+    return 1
+}
 #verifica se a diretoria de destino esta dentro a diretoria a de  funcao criar 
 
 
-#verificaçao e normalizaçao dos restantes argumentos ---
+#verificaçao e normalizaçao dos restantes argumentos
 #verifica se sao menos que dois 
 if [$@ -lt 2 ];then
     echo "Erro: Diretórios 'dir_trabalho' e 'dir_backup' são obrigatórios."
@@ -50,11 +76,25 @@ fi
 if [$@ -e 2 ];then
     dir_trabalho=$1
     dir_backup=$2
-    if
-    #chama funcao verifica diretoria(1)
-    #chama funcao verifica diretoria(2)
-    else 
-    do nothing 
+
+    VerificaDir "$dir_trabalho"
+    ret=$?
+    if [[ $ret == 0 ]] 
+        echo "O diretório $? não existe ou não é válido1"
+
+    VerificaDir "$dir_backup"
+    ret=$?
+# Verificamos se a diretoria de backup não existe
+    if [ $ret == 0]; then
+        # Escrevemos o comando no terminal independentemente do valor de CHECKING
+        echo "mkdir $dir_backup"
+        # Se CHECKING for false executamos o comando
+        if [ "$CHECKING" = false ]; then
+            mkdir "$dir_backup"
+        fi
+    fi
+else 
+do nothing 
 fi
 
 #verifica se sao mais dois (espaços)
@@ -120,43 +160,12 @@ fi
 
 
 
-
-
-
-            # Verifica se a expressão regular foi definida e é válida
-            if [[ -z "$REGEX" ]]; then
-                echo "Invalid Regular Expression: REGEX is not set"
-                ((errors++))
-                return
-            fi
-            # Testa se o REGEX é válido usando o grep
-            echo "" | grep -E "$REGEX" >/dev/null 2>&1
-            if [[ $? -ne 0 ]]; then
-                echo "Invalid Regular Expression: '$REGEX' is not a valid regex"
-                ((errors++))
-                return
-            fi
-
             # Verifica se o item não corresponde ao REGEX
             if ! echo "$(basename "$src_item")" | grep -qE "$REGEX"; then
                 echo "Skipping $src_item due to regex filter"
                 return
             fi
             
-            # Função para verificar se um caminho deve ser ignorado
-            should_ignore() {
-                local path="$1"
-                for ignore in "${ignore_paths[@]}"; do
-                    if [[ "$path" == $ignore ]]; then
-                        return 0  # Ignorar
-                    fi
-                done
-                return 1  # Não ignorar
-            }
-                file_Ignore=$1
-                src_item=$2
-                dest_item=$3
-            ;;
 
 
 

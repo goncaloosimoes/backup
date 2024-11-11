@@ -78,15 +78,7 @@ while getopts ":cb:r:" opt; do
             fi
             
             # Função para verificar se um caminho deve ser ignorado
-            should_ignore() {
-                local path="$1"
-                for ignore in "${ignore_paths[@]}"; do
-                    if [[ "$path" == $ignore ]]; then
-                        return 0  # Ignorar
-                    fi
-                done
-                return 1  # Não ignorar
-            }
+            
                 file_Ignore=$1
                 src_item=$2
                 dest_item=$3
