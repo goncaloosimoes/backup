@@ -27,8 +27,47 @@ REGEX=""
 # Processa as opções da linha de comando
 while getopts ":cb:r:" opt; do
     case $opt in
-        c) CHECKING=true ;;
-        b) IGNORE_FILE="$OPTARG" ;; # Lista de ficheiros a serem ignorados
+        c) CHECKING=true
+        echo "sfaijfij"
+            #variaveis = "$#"
+            src_item="$1"
+            dest_item="$2"
+        ;;
+        b) IGNORE_FILE="$OPTARG" # Lista de ficheiros a serem ignorados
+            # Verifica se a expressão regular foi definida e é válida
+            if [[ -z "$REGEX" ]]; then
+                echo "Invalid Regular Expression: REGEX is not set"
+                ((errors++))
+                return
+            fi
+            # Testa se o REGEX é válido usando o grep
+            echo "" | grep -E "$REGEX" >/dev/null 2>&1
+            if [[ $? -ne 0 ]]; then
+                echo "Invalid Regular Expression: '$REGEX' is not a valid regex"
+                ((errors++))
+                return
+            fi
+
+            # Verifica se o item não corresponde ao REGEX
+            if ! echo "$(basename "$src_item")" | grep -qE "$REGEX"; then
+                echo "Skipping $src_item due to regex filter"
+                return
+            fi
+            
+            # Função para verificar se um caminho deve ser ignorado
+            should_ignore() {
+                local path="$1"
+                for ignore in "${ignore_paths[@]}"; do
+                    if [[ "$path" == $ignore ]]; then
+                        return 0  # Ignorar
+                    fi
+                done
+                return 1  # Não ignorar
+            }
+                file_Ignore=$1
+                src_item=$2
+                dest_item=$3
+            ;;
         r) REGEX="$OPTARG" ;; # Expressão regular
         *) usage ;;
     esac
@@ -63,46 +102,13 @@ load_ignore_paths() {
     fi
 }
 
-# Função para verificar se um caminho deve ser ignorado
-should_ignore() {
-    local path="$1"
-    for ignore in "${ignore_paths[@]}"; do
-        if [[ "$path" == $ignore ]]; then
-            return 0  # Ignorar
-        fi
-    done
-    return 1  # Não ignorar
-}
-
 # Função para copiar arquivos e diretórios recursivamente
 copy_item() {
-    local src_item= "$1"
-    local dest_item= "$2"
+
 
     # Verifica se o item deve ser ignorado
     if should_ignore "$src_item"; then
         echo "Ignoring $src_item"
-        return
-    fi
-
-    # Verifica se a expressão regular foi definida e é válida
-    if [[ -z "$REGEX" ]]; then
-        echo "Invalid Regular Expression: REGEX is not set"
-        ((errors++))
-        return
-    fi
-
-    # Testa se o REGEX é válido usando o grep
-    echo "" | grep -E "$REGEX" >/dev/null 2>&1
-    if [[ $? -ne 0 ]]; then
-        echo "Invalid Regular Expression: '$REGEX' is not a valid regex"
-        ((errors++))
-        return
-    fi
-
-    # Verifica se o item não corresponde ao REGEX
-    if ! echo "$(basename "$src_item")" | grep -qE "$REGEX"; then
-        echo "Skipping $src_item due to regex filter"
         return
     fi
 
