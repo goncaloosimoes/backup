@@ -14,35 +14,6 @@ usage() {
     
 }
 
-
-
-# Verifica se pelo menos dir_trabalho e dir_backup foram passadas 
-if [ $# -lt 2 ] ; then 
-    usage
-    echo ""
-    exit 1
-fi
-
-
-# Diretórios passados nos argumentos
-dir_trabalho=$1
-dir_backup=$2
-
-# Se a diretoria de trabalho não existir, o programa acaba
-if [ ! -d "$dir_trabalho" ]; then
-    echo "ERROR: $dir_trabalho does not exist"
-    ((errors++))
-    exit 1
-fi
-
-# Verifica se a diretoria de backup não existe
-if [ ! -d "$dir_backup" ]; then
-    echo "mkdir $dir_backup"
-    if [ "$CHECKING" = false ]; then
-        mkdir -p "$dir_backup"
-    fi
-fi
-
 # Variáveis para o modo de CHECKING (-c), arquivo de ignorados(-b) e expressão regular(-r)
 CHECKING=false
 IGNORE_FILE=""
@@ -51,12 +22,107 @@ REGEX=""
 # Processa as opções da linha de comando 
 while getopts ":cb:r:" opt; do
     case $opt in
-        c) CHECKING=true
-            #variaveis = "$#"
-            src_item="$1"
-            dest_item="$2"
-        ;;
-        b) IGNORE_FILE="$OPTARG" # Lista de ficheiros a serem ignorados
+        c) CHECKING=true;;
+
+        b) IGNORE_FILE="$OPTARG";; # Verificaçao e Preparaçao da Lista de ficheiros a serem ignorados
+        #verificar se tem ficheiro , se este e valido e colocar nomes em array prontos a usar na main
+        r) REGEX="$OPTARG" ;; # Expressão regular
+        #verificar se regex é valido 
+        ?) usage 
+        exit 1;;
+    esac
+done
+# Remove as opções processadas
+shift $((OPTIND - 1))
+
+#verificadiretoria funcao criar____
+
+#verifica se a diretoria de destino esta dentro a diretoria a de  funcao criar 
+
+
+#verificaçao e normalizaçao dos restantes argumentos ---
+#verifica se sao menos que dois 
+if [$@ -lt 2 ];then
+    echo "Erro: Diretórios 'dir_trabalho' e 'dir_backup' são obrigatórios."
+    exit1
+fi
+#verifica se sao exatamente dois 
+if [$@ -e 2 ];then
+    dir_trabalho=$1
+    dir_backup=$2
+    if
+    #chama funcao verifica diretoria(1)
+    #chama funcao verifica diretoria(2)
+    else 
+    do nothing 
+fi
+
+#verifica se sao mais dois (espaços)
+if [ "$#" -gt 2 ]; then
+    
+    args1=("$@")  # Array com todos os argumentos passados
+    echo $args1
+    args=("" "")  # Array com dois elementos :diretorios
+
+    # Índice args
+    j=0
+    concat=""
+
+    # Itera sobre os argumentos
+    for ((i = 0; i < ${#args1[@]}; i++)); do
+        current_arg="${args1[i]}"  # Pega o argumento atual
+        echo $current_arg 
+        # Verifica se o argumento começa com '/', '.' ou '..'
+        if [[ "$current_arg" =~ ^/ ]] || [[ "$current_arg" =~ ^\.{1,2} ]]; then
+            # Se houver conteúdo no `concat`, salva no array `args`
+            if [ -n "$concat" ]; then
+                args[$j]="$concat"
+                ((j++))
+                concat=""
+            fi
+            # Armazena o argumento de diretório atual diretamente
+            args[$j]="$current_arg"
+            ((j++))
+        else
+            # Concatena o argumento atual à variável `concat` com espaço
+            concat="$concat $current_arg"
+        fi
+    done
+
+    # Adiciona qualquer conteúdo restante de `concat` ao array `args`, acumulando no último elemento válido
+    if [ -n "$concat" ] && [ "${args[1]}" != "" ]; then
+        args[$j-1]="${args[$j-1]} $concat"
+    fi
+    
+    # Após o loop, os dois primeiros argumentos devem ser diretórios válidos
+    dir_trabalho="${args[0]}"
+    dir_backup="${args[1]}"
+
+    # Exibe os diretórios finais
+    echo "Diretório de trabalho: $dir_trabalho"
+    echo "Diretório de backup: $dir_backup"
+fi
+
+    #verifica diretoria 
+#caso backuop nao existe cria 
+    
+# neste ponto é suposto termos acesso a:
+#- dir_trabalho valida 
+#- dir_backup  valida criada caso nao exista 
+#- array com nomes de ficheiros a ignorar(caso opt)
+#- expressao regex valida (caso opt) 
+#- checking variable 
+
+
+
+
+
+
+
+
+
+
+
             # Verifica se a expressão regular foi definida e é válida
             if [[ -z "$REGEX" ]]; then
                 echo "Invalid Regular Expression: REGEX is not set"
@@ -91,14 +157,8 @@ while getopts ":cb:r:" opt; do
                 src_item=$2
                 dest_item=$3
             ;;
-        r) REGEX="$OPTARG" ;; # Expressão regular
-        *) usage 
-        exit 1;;
-    esac
-done
 
-# Remove as opções processadas
-shift $((OPTIND - 1))
+
 
 
 
