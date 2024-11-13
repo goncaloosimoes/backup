@@ -18,10 +18,14 @@ if [ "$#" -gt 2 ]; then
         # Verifica se o argumento começa com '/', '.' ou '..'
         if [[ "$current_arg" =~ ^/ ]] || [[ "$current_arg" =~ ^\.{1,2} ]]; then
             # Se houver conteúdo no `concat`, salva no array `args`
-            if [ -n "$concat" ]; then
-                args[$j]="$concat"
-                ((j++))
-                concat=""
+            if [ -n "$concat" ] && [ -d "$concat" ]; then
+
+                    args[$j]="$concat"
+                    ((j++))
+                    concat=""
+            
+            else
+                    concat="$concat $current_arg"
             fi
             # Armazena o argumento de diretório atual diretamente
             args[$j]="$current_arg"
@@ -29,6 +33,8 @@ if [ "$#" -gt 2 ]; then
         else
             # Concatena o argumento atual à variável `concat` com espaço
             concat="$concat $current_arg"
+            
+            
         fi
     done
 
@@ -36,11 +42,11 @@ if [ "$#" -gt 2 ]; then
     if [ -n "$concat" ] && [ "${args[1]}" != "" ]; then
         args[$j-1]="${args[$j-1]} $concat"
     fi
-    
+
     # Após o loop, os dois primeiros argumentos devem ser diretórios válidos
     dir_trabalho="${args[0]}"
     dir_backup="${args[1]}"
-
+    echo "$args"
     # Exibe os diretórios finais
     echo "Diretório de trabalho: $dir_trabalho"
     echo "Diretório de backup: $dir_backup"

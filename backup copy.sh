@@ -70,6 +70,7 @@ VerificaDir() {
 #verifica se sao menos que dois 
 if [$@ -lt 2 ];then
     echo "Erro: Diretórios 'dir_trabalho' e 'dir_backup' são obrigatórios."
+    ((errors++))
     exit1
 fi
 #verifica se sao exatamente dois 
