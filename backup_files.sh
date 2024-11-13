@@ -1,16 +1,18 @@
 #!/bin/bash
 
-# Contadores
+# Contadores de ficheiros e ocorrências de erros/avisos
 errors=0
 warnings=0
 updated=0
 copied=0
 deleted=0
-total_bytes=0
+# Contadores de memória
+total_bytes_copied=0
+total_bytes_deleted=0
 
 # Função para exibir a mensagem de uso
 usage() {
-    echo "Uso: $0 [-c] [-b tfile] [-r regexpr] <dir_trabalho> <dir_backup>"
+    echo "Usage: $0 [-c] <dir_trabalho> <dir_backup>"
     exit 1
 }
 
@@ -66,7 +68,7 @@ copy_file() {
             # Se a cópia for bem-sucedida, incrementa o contador de copiados
             ((copied++))
             file_size=$(stat -c%s "$src_file")  # Obtém o tamanho do arquivo
-            ((total_bytes+=file_size))  # Soma ao total de bytes copiados
+            ((total_bytes_copied+=file_size))  # Soma ao total de bytes copiados
         else
             # Se ocorrer um erro na cópia
             echo "ERROR: failed to copy $src_file to $dest_file" >&2
@@ -76,7 +78,28 @@ copy_file() {
         # O contador de copiados ainda é incrementado para o modo de verificação
         ((copied++))
         file_size=$(stat -c%s "$src_file")  # Obtém o tamanho do arquivo
-        ((total_bytes+=file_size))  # Soma ao total de bytes copiados
+        ((total_bytes_copied+=file_size))  # Soma ao total de bytes copiados
+    fi
+}
+
+# Função para apagar um ficheiro da diretoria backup se ele já não existir na diretoria de trabalho
+delete_file() {
+    # Caminho para o ficheiro de destino que desejamos apagar
+    local dest_file=$1
+    echo "rm $dest_file"
+
+    # Se checking for false corremos os comandos
+    if [ "$CHECKING" = false ]; then
+        if rm "$dest_file"; then
+            ((deleted++))
+            file_size=$(stat -c%s "$dest_file")
+            ((total_bytes_deleted+=file_size))
+        else
+            echo "ERROR: failed to delete $dest_file" >&2
+            ((errors++))
+        fi
+    else
+        ((deleted++))
     fi
 }
 
@@ -104,5 +127,16 @@ for file in "$dir_trabalho"/*; do
     fi
 done
 
+# Verifica arquivos presentes no backup
+for backup_file in "$dir_backup"/*; do
+    filename=$(basename "$backup_file")
+    file="$dir_trabalho/$filename"
+
+    # Se o ficheiro não existe mais no diretório de trabalho, fazemos delete do ficheiro no backup
+    if [ ! -f "$file" ]; then
+        delete_file "$backup_file"
+    fi
+done
+
 # Mensagem do final do backup
-echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes B); $deleted deleted (0 B)"
+echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
