@@ -5,7 +5,7 @@ if [ "$#" -gt 2 ]; then
     
     args1=("$@")       # Array com todos os argumentos passados
     concat=""          # Variável para armazenar a concatenação dos argumentos
-    dir_backup=""      # Variável para armazenar o segundo diretório
+    dir_backup=""      # Variável para armazenar o diretorio de bcakup
     echo "-----------------------------------------------------------------"
     
     # Remove espaços à esquerda do primeiro argumento
@@ -38,14 +38,27 @@ if [ "$#" -gt 2 ]; then
             echo "Concatenação atual: \"$new_concat\" ponto"
             concat="$new_concat"
             
-            # Verifica se `new_concat` é um diretório válido
-            if [ -d "$new_concat" ]; then
-                dir_trabalho="$new_concat"  # Atualiza o primeiro diretório válido
-                echo "Diretório de trabalho válido encontrado: $new_concat"
-                j=$((i + 1))  # Define o índice do próximo elemento
-                break
+            # Verifica se `new_concat` é um diretório válido adicionar espaços a frnete do diretorio para testar se este existe com espaços a frente 
+            # Verificar se a string contém '/'
+            if [[ "$concat" == *"/"* ]]; then
+                ultimoNome="${concat##*/}"
+            else
+                ultimoNome="$concat"
             fi
+            
+            # Tenta adicionar espaços à esquerda e verificar se é um diretório válido
+            # um diretorio em linux so pode ter 255 caracteres 
+            for ((s = 0; s <= 255 - ${#ultimoNome}; s++)); do
+                space=$(printf '%*s' $s)  # Gera `s` espaços
+                if [ -d "$concat" ]||[ -d "$concat$space" ]; then
+                    dir_trabalho="$space$concat"  # Atualiza o primeiro diretório válido
+                    echo "Diretório de trabalho válido encontrado: '$dir_trabalho'"
+                    j=$((i + 1))  # Define o índice do próximo elemento
+                    break 2  # Sai do loop
+                fi
+            done
         done
+        
     
 
     # Caso não encontre um diretório válido para o primeiro diretório
