@@ -110,15 +110,17 @@ if [[ $? -eq 1 ]]; then
     fi
 fi
 
-#
-copy_item() {
-    # Caminho do arquivo de origem
-    local src_item="$1"  
-    # Caminho do arquivo de destino
-    local dest_item="$2" 
+# diretorio destino
+# diretorio de backup
+# array com ignore paths
+# regex
+# checking
 
-    # Exibe o comando de cópia no terminal, para monitoramento
-    echo "cp -a \"$src_item\" \"$dest_item\""
+copy_item() {   
+    local src_item="$1"                 # Caminho do arquivo de origem
+    local dest_item="$2"                # Caminho do arquivo de destino
+
+    echo "cp -a \"$src_item\" \"$dest_item\""   # Exibe o comando de cópia no terminal, para monitoramento
 
     # Verifica se o item deve ser ignorado ou se não corresponde ao filtro de regex
     if should_ignore "$src_item" || [[ -n "$REGEX" && ! "$(basename "$src_item")" =~ $REGEX ]]; then
@@ -134,44 +136,50 @@ copy_item() {
             mkdir -p "$dest_item"
         fi
 
-        # Loop para processar todos os itens dentro do diretório
-        for item in "$src_item"/*; do
-            # Verifica se o item não está vazio e faz a cópia recursiva
-            if [ -e "$item" ]; then
-                # Chama recursivamente a função para copiar os itens do diretório
-                copy_item "$item" "$dest_item/$(basename "$item")"
-            fi
-        done
-    else
-        # Se for um ficheiro, verifica se o item de destino já existe
-        if [ ! -e "$dest_item" ] || [ "$src_item" -nt "$dest_item" ]; then
-            # Se o arquivo de destino não existir ou se o arquivo de origem for mais recente
+    else    # Se for um ficheiro, verifica se o item de destino já existe
+        if [ ! -e "$dest_item" ]; then
+            # Caso o arquivo de destino não exista, considera como um novo arquivo copiado
             if [ "$CHECKING" = false ]; then
-                # Realiza a cópia do arquivo
-                echo entrei
                 if cp -a "$src_item" "$dest_item"; then
-                    echo "Arquivo copiado: $src_item para $dest_item"
                     ((copied++))  # Incrementa contador de arquivos copiados
                     # Obtém o tamanho do arquivo e adiciona ao total de bytes copiados
                     file_size=$(stat -c%s "$src_item")
                     ((total_bytes_copied+=file_size))
                 else
-                    echo "Erro ao copiar $src_item para $dest_item" >&2
+                    # Se ocorrer um erro na cópia
+                    echo "ERROR: failed to copy $src_file to $dest_file" >&2
+                    ((errors++))  # Incrementa o contador de erros
+                fi
+            else
+                ((copied++)) # Incrementa contador de arquivos copiados no modo checking
+                # Simula a cópia e calcula o tamanho do arquivo
+                file_size=$(stat -c%s "$src_item")
+                ((total_bytes_copied+=file_size))
+            fi
+        elif [ "$src_item" -nt "$dest_item" ]; then
+            # Caso o arquivo de destino exista, mas o arquivo de origem seja mais recente, considera como atualizado
+            if [ "$CHECKING" = false ]; then
+                if cp -a "$src_item" "$dest_item"; then
+                    ((updated++))  # Incrementa contador de arquivos atualizados
+                    # Obtém o tamanho do arquivo e adiciona ao total de bytes copiados
+                    file_size=$(stat -c%s "$src_item")
+                    ((total_bytes_copied+=file_size))
+                else
+                    echo "ERROR: failed to update $src_file to $dest_file" >&2
                     ((errors++))  # Incrementa contador de erros
                 fi
             else
-                # Apenas simula a cópia e calcula o tamanho do arquivo (sem realizar a cópia real)
+                ((updated++))  # Incrementa contador de arquivos atualizados
+                # Simula a atualização e calcula o tamanho do arquivo
                 file_size=$(stat -c%s "$src_item")
                 ((total_bytes_copied+=file_size))
-                echo "Simulando cópia do arquivo: $src_item (Modo CHECKING)"
             fi
-        else
-            echo "O arquivo de destino $dest_item já existe e está atualizado. Nenhuma cópia necessária."
         fi
     fi
 }
 
 delete_item() {
+    
     # Caminho para o ficheiro ou diretoria de destino que desejamos apagar
     local dest="$1"
     echo "rm -r \"$dest\""
@@ -214,16 +222,17 @@ delete_item() {
 }
 
 
-# Apaga arquivos no backup que não existem mais no diretório de trabalho
-
-# Iniciando o backup de fato ou simulação
-# Loop pelos ficheiros no diretório de trabalho
+# Loop pelos itens no diretório de trabalho
 for file in "$dir_trabalho"/*; do
-    # Verifica se o item é um ficheiro
-    if [ -f "$file" ]; then
-        filename=$(basename "$file")
-        backup_file="$dir_backup/$filename"
-        # Verifica se o ficheiro já existe na diretoria de backup
+    # Obter o nome base do arquivo/diretório
+    filename=$(basename "$file")
+    backup_file="$dir_backup/$filename"
+
+    if [ -d "$file" ]; then
+        # Caso o item seja um diretório
+        copy_item "$file" "$backup_file"
+    elif [ -f "$file" ]; then
+        # Caso o item seja um arquivo
         if [ -f "$backup_file" ]; then
             # Atualiza apenas se o ficheiro de origem for mais recente 
             if [ "$file" -nt "$backup_file" ] || [ ! -e "$backup_file" ]; then
@@ -266,10 +275,4 @@ for backup_item in "$dir_backup"/*; do
     fi
 done
 
-# Mensagem de conclusão
-echo "Processo concluído."
-if [ "$CHECKING" = false ]; then
-    echo "Backup concluído: $errors erros; $warnings avisos; $updated atualizados; $copied copiados ($total_bytes_copied bytes); $deleted excluídos ($total_bytes_deleted bytes)"
-else
-    echo "Simulação concluída: $errors erros; $warnings avisos; $updated atualizados; $copied copiados ($total_bytes_copied bytes); $deleted excluídos ($total_bytes_deleted bytes)"
-fi
+echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
