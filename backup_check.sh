@@ -12,13 +12,13 @@ check_directory() {
     return 0  # Diretório existe
 }
 
-check_directory $dir_trabalho
+check_directory "$dir_trabalho"
 if [[ $? -eq 1 ]]; then
     echo "ERROR: '$dir_trabalho' does not exist or it is not a directory"
     exit 1
 fi
 
-check_directory $dir_backup
+check_directory "$dir_backup"
 if [[ $? -eq 1 ]]; then
     echo "ERROR: '$dir_backup' does not exist or it is not a directory"
     exit 1
