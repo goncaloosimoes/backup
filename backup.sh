@@ -66,7 +66,7 @@ shift $((OPTIND - 1))
 # Valida se o número de argumentos é adequado
 if [ "$#" -lt 2 ]; then
     echo "ERROR: need at least 2 arguments: working directory and backup directory"
-    exit 1
+    usage
 fi
 
 # Normalização e atribuição dos diretórios dir_trabalho e dir_backup
@@ -130,7 +130,7 @@ copy_item() {
                 fi
             else
                 # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
-                item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item"))
+                item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
             fi
         elif [ "$src_item" -nt "$dest_item" ]; then
             # Caso o arquivo de destino exista, mas o arquivo de origem seja mais recente, considera como atualizado
@@ -172,12 +172,9 @@ delete_item() {
 
         if [ "$CHECKING" = false ]; then
             # Apagar o arquivo ou diretório usando a string armazenada anteriormente
-            if eval $rm_command; then
-            else
+            if ! eval $rm_command; then
                 echo "ERROR: Failed to delete $dest" >&2
             fi
-        else
-            # Modo CHECKING: apenas simula a exclusão
         fi
     fi
 }
@@ -193,9 +190,11 @@ while read -r item; do
     backup_item="$dir_backup/$relative_path"  # Alterado de backup_file para backup_item
 
     if [ -d "$item" ]; then
-        # Se o item é um diretório, cria o diretório correspondente no backup
-        mkdir -p "$backup_item"
-        echo "mkdir -p $backup_item"
+        # Se o item é um diretório, cria o diretório correspondente no backup se ele ainda não existir
+        if [ ! -d "$backup_item" ]; then
+            mkdir -p "$backup_item"
+            echo "mkdir -p $backup_item"
+        fi
     elif [ -f "$item" ]; then
         # Se o item é um arquivo
         if [ -f "$backup_item" ]; then
