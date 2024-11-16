@@ -178,15 +178,24 @@ copy_item() {
 delete_item() {
     # Caminho para o ficheiro ou diretório de destino que desejamos apagar
     local dest="$1"
+    local item_size=0
 
     if [ -e "$dest" ]; then  # Apenas processa se o caminho existir
-        # Determina o tamanho do arquivo/diretório antes de apagar
         if [ -f "$dest" ]; then
-            item_size=$(stat -c%s "$dest" 2>/dev/null || stat -f%z "$dest")  # Linux ou macOS
+            # Se for um arquivo, somamos seu tamanho
+            item_size=$(stat -c %s "$dest" 2>/dev/null || stat -f %z "$dest")
             rm_command="rm \"$dest\""
         elif [ -d "$dest" ]; then
-            item_size=$(du -sb "$dest" 2>/dev/null | cut -f1 || du -sk "$dest" | cut -f1)
+            # Se for um diretório, vamos somar o tamanho de todos os arquivos dentro dele
             rm_command="rm -r \"$dest\""
+            # Itera sobre todos os arquivos e subdiretórios dentro do diretório
+            while IFS= read -r file; do
+                if [ -f "$file" ]; then
+                    # Soma o tamanho do arquivo
+                    file_size=$(stat -c %s "$file" 2>/dev/null || stat -f %z "$file")
+                    item_size=$((item_size + file_size))
+                fi
+            done < <(find "$dest" -type f)  # Encontra todos os arquivos dentro do diretório
         else
             echo "WARNING: '$dest' is not a file or a directory?"
             ((warnings++))
@@ -195,23 +204,24 @@ delete_item() {
 
         # Print do comando de remoção do item consoante a sua natureza (ficheiro/diretoria)
         echo "$rm_command"
+        ((total_bytes_deleted+=item_size)) # Adiciona o tamanho do ficheiro/diretório aos bytes apagados
+        ((deleted++))  # Incrementa o número de itens apagados
 
         if [ "$CHECKING" = false ]; then
             # Apagar o arquivo ou diretório usando a string armazenada anteriormente
             if eval $rm_command; then
-                ((deleted++))  # Incrementa o número de itens apagados
-                ((total_bytes_deleted+=item_size))  # Soma ao total de bytes apagados
+                # Comando executado com sucesso
+                :
             else
+                ((total_bytes_deleted-=item_size)) # Corrige o tamanho do ficheiro/diretório aos bytes apagados
+                ((deleted--))  # Decrementa o número de itens apagados porque não foi possível apagar
                 echo "ERROR: Failed to delete $dest" >&2
                 ((errors++))
             fi
-        else
-            # Modo CHECKING: apenas simula a exclusão
-            ((deleted++))
-            ((total_bytes_deleted+=item_size))
         fi
     fi
 }
+
 
 # Para que o loop não inicie se não houver arquivos no diretório de trabalho
 shopt -s nullglob
@@ -224,9 +234,11 @@ while read -r item; do
     backup_item="$dir_backup/$relative_path"  # Alterado de backup_file para backup_item
 
     if [ -d "$item" ]; then
-        # Se o item é um diretório, cria o diretório correspondente no backup
-        mkdir -p "$backup_item"
-        echo "mkdir -p $backup_item"
+        # Se o item é um diretório, cria o diretório correspondente no backup se ele ainda não existir
+        if [ ! -d "$backup_item" ]; then
+            mkdir -p "$backup_item"
+            echo "mkdir -p $backup_item"
+        fi
     elif [ -f "$item" ]; then
         # Se o item é um arquivo
         if [ -f "$backup_item" ]; then
