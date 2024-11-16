@@ -1,6 +1,16 @@
 #!/bin/bash
 
-# Função de ajuda de uso
+# Contadores de ficheiros e ocorrências de erros/avisos
+errors=0
+warnings=0
+updated=0
+copied=0
+deleted=0
+
+# Contadores de memória
+total_bytes_copied=0
+total_bytes_deleted=0
+
 usage() {
     echo "Usage: $0 [-c] [-b tfile] [-r regexpr] <dir_trabalho> <dir_backup>"
     exit 1
@@ -49,11 +59,13 @@ while getopts ":cb:r:" opt; do
             # Validação da expressão regular
             if [[ -z "$REGEX" ]]; then
                 echo "ERROR: Regex is not defined"
+                ((errors++))
                 exit 1
             fi
             echo "" | grep -E "$REGEX" >/dev/null 2>&1
             if [[ $? -ne 0 ]]; then
                 echo "ERROR:'$REGEX' is not a valid regex"
+                ((errors++))
                 exit 1
             fi;;
         ?) usage;;
@@ -66,6 +78,7 @@ shift $((OPTIND - 1))
 # Valida se o número de argumentos é adequado
 if [ "$#" -lt 2 ]; then
     echo "ERROR: need at least 2 arguments: working directory and backup directory"
+    ((errors++))
     exit 1
 fi
 
@@ -78,6 +91,7 @@ dir_backup="${args[1]}"
 check_directory "$dir_trabalho"
 if [[ $? -eq 1 ]]; then
     echo "ERROR: '$dir_trabalho' does not exist or it is not a directory"
+    ((errors++))
     exit 1
 fi
 
@@ -90,6 +104,7 @@ if [[ $? -eq 1 ]]; then
         # Se o checking for false executamos o comando
         if ! mkdir -p "$dir_backup"; then
             echo "ERROR: $dir_backup could not be created."
+            ((errors++))
             exit 1
         fi
     fi
@@ -122,29 +137,39 @@ copy_item() {
             # Caso o arquivo de destino não exista, considera como um novo arquivo copiado
             if [ "$CHECKING" = false ]; then
                 if cp -a "$src_item" "$dest_item"; then
+                    ((copied++))  # Incrementa contador de arquivos copiados
                     # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
                     item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
+                    ((total_bytes_copied+=item_size))
                 else
                     # Se ocorrer um erro na cópia
                     echo "ERROR: failed to copy $src_item to $dest_item" >&2
+                    ((errors++))  # Incrementa o contador de erros
                 fi
             else
+                ((copied++)) # Incrementa contador de arquivos copiados no modo checking
                 # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
-                item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item"))
+                item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
+                ((total_bytes_copied+=item_size))
             fi
         elif [ "$src_item" -nt "$dest_item" ]; then
             # Caso o arquivo de destino exista, mas o arquivo de origem seja mais recente, considera como atualizado
             if [ "$CHECKING" = false ]; then
                 if cp -a "$src_item" "$dest_item"; then
+                    ((updated++))  # Incrementa contador de arquivos atualizados
                     # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
                     item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
+                    ((total_bytes_copied+=item_size))
                 else
                     echo "ERROR: failed to update $src_item to $dest_item" >&2
+                    ((errors++))  # Incrementa contador de erros
                 fi
             else
+                ((updated++))  # Incrementa contador de arquivos atualizados
                 # Simula a atualização e calcula o tamanho do arquivo
                 # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
                 item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
+                ((total_bytes_copied+=item_size))
             fi
         fi
     fi
@@ -164,6 +189,7 @@ delete_item() {
             rm_command="rm -r \"$dest\""
         else
             echo "WARNING: '$dest' is not a file or a directory?"
+            ((warnings++))
             return
         fi
 
@@ -173,11 +199,16 @@ delete_item() {
         if [ "$CHECKING" = false ]; then
             # Apagar o arquivo ou diretório usando a string armazenada anteriormente
             if eval $rm_command; then
+                ((deleted++))  # Incrementa o número de itens apagados
+                ((total_bytes_deleted+=item_size))  # Soma ao total de bytes apagados
             else
                 echo "ERROR: Failed to delete $dest" >&2
+                ((errors++))
             fi
         else
             # Modo CHECKING: apenas simula a exclusão
+            ((deleted++))
+            ((total_bytes_deleted+=item_size))
         fi
     fi
 }
@@ -204,6 +235,7 @@ while read -r item; do
                 copy_item "$item" "$backup_item"
             else
                 echo "WARNING: backup entry $backup_item is newer than $item; Should not happen"
+                ((warnings++))  # Incrementa o contador de avisos
             fi
         else
             # Se o arquivo não existe no backup, é copiado
@@ -230,3 +262,6 @@ while read -r backup_item; do
         fi
     fi
 done < <(find "$dir_backup" -mindepth 1)
+
+# Exibe o resumo final
+echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
