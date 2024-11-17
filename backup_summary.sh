@@ -114,7 +114,9 @@ copy_item() {
     local src_item="$1"                 # Caminho do arquivo de origem
     local dest_item="$2"                # Caminho do arquivo de destino
 
-    echo "cp -a \"$src_item\" \"$dest_item\""   # Exibe o comando de cópia no terminal, para monitoramento
+    if [ ! -e "$dest_item" ]; then
+        echo "cp -a \"$src_item\" \"$dest_item\""
+    fi
 
     # Verifica se o item deve ser ignorado ou se não corresponde ao filtro de regex
     if should_ignore "$src_item" || [[ -n "$REGEX" && ! "$(basename "$src_item")" =~ $REGEX ]]; then
@@ -229,21 +231,11 @@ while read -r item; do
             fi
         fi
     elif [ -f "$item" ]; then
-        # Se o item é um arquivo
-        if [ -f "$backup_item" ]; then
-            # Atualiza apenas se o arquivo de origem for mais recente
-            if [ "$item" -nt "$backup_item" ]; then
-                copy_item "$item" "$backup_item"
-            else
-                echo "WARNING: backup entry $backup_item is newer than $item; Should not happen"
-                ((warnings++))  # Incrementa o contador de avisos
-            fi
-        else
-            # Se o arquivo não existe no backup, é copiado
-            copy_item "$item" "$backup_item"
-        fi
+        # Se o item é um arquivo chama a função copy_item que já regula se é uma atualização ou cópia
+        copy_item "$item" "$backup_item"
     fi
 done < <(find "$dir_trabalho" -mindepth 1)
+
 
 if [ -d "$dir_backup" ]; then
     # Loop recursivo para verificar arquivos presentes no backup, se o diretório backup existir
