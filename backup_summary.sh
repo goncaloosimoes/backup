@@ -110,7 +110,7 @@ if [[ $? -eq 1 ]]; then
     fi
 fi
 
-copy_item() {   
+copy_item() {
     local src_item="$1"                 # Caminho do arquivo de origem
     local dest_item="$2"                # Caminho do arquivo de destino
 
@@ -124,22 +124,19 @@ copy_item() {
 
     # Verifica se o item de origem é um diretório
     if [ -d "$src_item" ]; then
-        # Verifica se o diretório backup correspondente não existe
-        if [ ! -d "$dest_item" ]; then
-            echo "mkdir -p $dest_item"
-            # Se não estiver no modo CHECKING, cria o diretório de destino
-            if [ "$CHECKING" = false ]; then
-                mkdir -p "$dest_item"
-            fi
+        # Cria o diretório de destino, se necessário
+        echo "mkdir -p $dest_item"
+        if [ "$CHECKING" = false ]; then
+            mkdir -p "$dest_item"
         fi
     else    # Se for um ficheiro, verifica se o item de destino já existe
+        item_size=$(stat -c%s "$src_item" 2>/dev/null || stat -f%z "$src_item")
+        
         if [ ! -e "$dest_item" ]; then
             # Caso o arquivo de destino não exista, considera como um novo arquivo copiado
             if [ "$CHECKING" = false ]; then
                 if cp -a "$src_item" "$dest_item"; then
                     ((copied++))  # Incrementa contador de arquivos copiados
-                    # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
-                    item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
                     ((total_bytes_copied+=item_size))
                 else
                     # Se ocorrer um erro na cópia
@@ -148,8 +145,6 @@ copy_item() {
                 fi
             else
                 ((copied++)) # Incrementa contador de arquivos copiados no modo checking
-                # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
-                item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
                 ((total_bytes_copied+=item_size))
             fi
         elif [ "$src_item" -nt "$dest_item" ]; then
@@ -157,8 +152,6 @@ copy_item() {
             if [ "$CHECKING" = false ]; then
                 if cp -a "$src_item" "$dest_item"; then
                     ((updated++))  # Incrementa contador de arquivos atualizados
-                    # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
-                    item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
                     ((total_bytes_copied+=item_size))
                 else
                     echo "ERROR: failed to update $src_item to $dest_item" >&2
@@ -166,62 +159,56 @@ copy_item() {
                 fi
             else
                 ((updated++))  # Incrementa contador de arquivos atualizados
-                # Simula a atualização e calcula o tamanho do arquivo
-                # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
-                item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
-                ((total_bytes_copied+=item_size))
+                ((total_bytes_copied+=item_size)) # Simula a atualização e calcula o tamanho do arquivo
             fi
         fi
     fi
 }
 
+
 delete_item() {
-    # Caminho para o ficheiro ou diretório de destino que desejamos apagar
     local dest="$1"
     local item_size=0
 
-    if [ -e "$dest" ]; then  # Apenas processa se o caminho existir
+    if [ -e "$dest" ]; then
         if [ -f "$dest" ]; then
-            # Se for um arquivo, somamos seu tamanho
+            # Se for um arquivo, soma o tamanho e apaga
             item_size=$(stat -c %s "$dest" 2>/dev/null || stat -f %z "$dest")
             rm_command="rm \"$dest\""
+            ((total_bytes_deleted+=item_size))
+            ((deleted++))  # Incrementa o número de itens apagados
         elif [ -d "$dest" ]; then
-            # Se for um diretório, vamos somar o tamanho de todos os arquivos dentro dele
-            rm_command="rm -r \"$dest\""
-            # Itera sobre todos os arquivos e subdiretórios dentro do diretório
-            while IFS= read -r file; do
+            # Se for um diretório, iterar sobre todos os itens dentro dele
+            for file in "$dest"/*; do
                 if [ -f "$file" ]; then
-                    # Soma o tamanho do arquivo
+                    # Soma o tamanho e conta cada arquivo
                     file_size=$(stat -c %s "$file" 2>/dev/null || stat -f %z "$file")
-                    item_size=$((item_size + file_size))
+                    ((total_bytes_deleted+=file_size))
+                    ((deleted++))  # Incrementa o contador de itens apagados
+                elif [ -d "$file" ]; then
+                    # Conta o diretório como item (se necessário)
+                    ((deleted++))
                 fi
-            done < <(find "$dest" -type f)  # Encontra todos os arquivos dentro do diretório
+            done
+            
+            # Finalmente, apaga o diretório
+            rm_command="rm -r \"$dest\""
         else
             echo "WARNING: '$dest' is not a file or a directory?"
             ((warnings++))
             return
         fi
 
-        # Print do comando de remoção do item consoante a sua natureza (ficheiro/diretoria)
+        # Executa o comando de remoção
         echo "$rm_command"
-        ((total_bytes_deleted+=item_size)) # Adiciona o tamanho do ficheiro/diretório aos bytes apagados
-        ((deleted++))  # Incrementa o número de itens apagados
-
         if [ "$CHECKING" = false ]; then
-            # Apagar o arquivo ou diretório usando a string armazenada anteriormente
-            if eval $rm_command; then
-                # Comando executado com sucesso
-                :
-            else
-                ((total_bytes_deleted-=item_size)) # Corrige o tamanho do ficheiro/diretório aos bytes apagados
-                ((deleted--))  # Decrementa o número de itens apagados porque não foi possível apagar
+            if ! eval $rm_command; then
                 echo "ERROR: Failed to delete $dest" >&2
                 ((errors++))
             fi
         fi
     fi
 }
-
 
 # Para que o loop não inicie se não houver arquivos no diretório de trabalho
 shopt -s nullglob
@@ -236,8 +223,10 @@ while read -r item; do
     if [ -d "$item" ]; then
         # Se o item é um diretório, cria o diretório correspondente no backup se ele ainda não existir
         if [ ! -d "$backup_item" ]; then
-            mkdir -p "$backup_item"
             echo "mkdir -p $backup_item"
+            if [ "$CHECKING" = false ]; then
+                mkdir -p "$backup_item"
+            fi
         fi
     elif [ -f "$item" ]; then
         # Se o item é um arquivo
@@ -256,24 +245,26 @@ while read -r item; do
     fi
 done < <(find "$dir_trabalho" -mindepth 1)
 
-# Loop recursivo para verificar arquivos presentes no backup
-while read -r backup_item; do
-    # Obtém o caminho relativo ao backup para mapear ao diretório de trabalho
-    relative_path="${backup_item#$dir_backup/}"
-    item="$dir_trabalho/$relative_path"
+if [ -d "$dir_backup" ]; then
+    # Loop recursivo para verificar arquivos presentes no backup, se o diretório backup existir
+    while read -r backup_item; do
+        # Obtém o caminho relativo ao backup para mapear ao diretório de trabalho
+        relative_path="${backup_item#$dir_backup/}"
+        item="$dir_trabalho/$relative_path"
 
-    if [ -f "$backup_item" ]; then
-        # Verifica se o arquivo correspondente no diretório de trabalho existe
-        if [ ! -e "$item" ]; then
-            delete_item "$backup_item"  # Apaga o arquivo se ele não existir no dir_trabalho
+        if [ -f "$backup_item" ]; then
+            # Verifica se o arquivo correspondente no diretório de trabalho existe
+            if [ ! -e "$item" ]; then
+                delete_item "$backup_item"  # Apaga o arquivo se ele não existir no dir_trabalho
+            fi
+        elif [ -d "$backup_item" ]; then
+            # Verifica se o diretório correspondente no diretório de trabalho existe
+            if [ ! -d "$item" ]; then
+                delete_item "$backup_item"  # Apaga o diretório se não existir no dir_trabalho
+            fi
         fi
-    elif [ -d "$backup_item" ]; then
-        # Verifica se o diretório correspondente no diretório de trabalho existe
-        if [ ! -d "$item" ]; then
-            delete_item "$backup_item"  # Apaga o diretório se não existir no dir_trabalho
-        fi
-    fi
-done < <(find "$dir_backup" -mindepth 1)
+    done < <(find "$dir_backup" -mindepth 1)
+fi
 
 # Exibe o resumo final
 echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
