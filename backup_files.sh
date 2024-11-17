@@ -10,6 +10,8 @@ deleted=0
 total_bytes_copied=0
 total_bytes_deleted=0
 
+export LC_ALL=C
+
 # Função para exibir a mensagem de uso
 usage() {
     echo "Usage: $0 [-c] <dir_trabalho> <dir_backup>"
@@ -33,6 +35,13 @@ fi
 # Diretórios passados nos argumentos
 dir_trabalho="$1"
 dir_backup="$2"
+
+# Verifica se dir_backup está dentro de dir_trabalho
+if [[ "$dir_backup" == "$dir_trabalho"* ]]; then
+    echo "ERROR: The backup directory ($dir_backup) cannot be inside the working directory ($dir_trabalho)."
+    ((errors++))
+    exit 1
+fi
 
 # Se a diretoria de trabalho não existir o programa acaba
 if [ ! -d "$dir_trabalho" ]; then

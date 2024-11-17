@@ -76,6 +76,13 @@ args=("$@")
 dir_trabalho="${args[0]}"
 dir_backup="${args[1]}"
 
+# Verifica se dir_backup está dentro de dir_trabalho
+if [[ "$dir_backup" == "$dir_trabalho"* ]]; then
+    echo "ERROR: The backup directory ($dir_backup) cannot be inside the working directory ($dir_trabalho)."
+    ((errors++))
+    exit 1
+fi
+
 # Verificação do diretório de trabalho
 check_directory "$dir_trabalho"
 if [[ $? -eq 1 ]]; then
