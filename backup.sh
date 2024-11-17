@@ -52,12 +52,8 @@ while getopts ":cb:r:" opt; do
             if [[ -z "$REGEX" ]]; then
                 echo "ERROR: Regex is not defined"
                 exit 1
-            fi
-            echo "" | grep -E "$REGEX" >/dev/null 2>&1
-            if [[ $? -ne 0 ]]; then
-                echo "ERROR:'$REGEX' is not a valid regex"
-                exit 1
             fi;;
+
         ?) usage;;
     esac
 done
@@ -111,7 +107,7 @@ copy_item() {
     echo "cp -a \"$src_item\" \"$dest_item\""   # Exibe o comando de cópia no terminal, para monitoramento
 
     # Verifica se o item deve ser ignorado ou se não corresponde ao filtro de regex
-    if should_ignore "$src_item" || [[ -n "$REGEX" && ! "$(basename "$src_item")" =~ $REGEX ]]; then
+    if should_ignore "$src_item" || [[! -n "$REGEX" && ! "$(basename "$src_item")" =~ $REGEX ]]; then
         echo "Ignoring $src_item due to regex or ignore file"
         return
     fi
