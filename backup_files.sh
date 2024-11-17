@@ -147,7 +147,7 @@ for file in "$dir_trabalho"/*; do
             if [ "$file" -nt "$backup_file" ] || [ ! -e "$backup_file" ]; then
                 copy_file "$file" "$backup_file"
                 ((updated++))  # Incrementa o contador de atualizações
-            elif [ "$file" -nt "$backup_file" ]; then
+            elif [ "$backup_file" -nt "$file" ]; then
                 echo "WARNING: backup entry $backup_file is newer than $file; Should not happen"
                 ((warnings++))  # Incrementa o contador de avisos
             fi
