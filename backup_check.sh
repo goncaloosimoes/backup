@@ -35,7 +35,7 @@ for src_file in "$dir_trabalho"/*; do
         bak_file="$dir_backup/$filename"
 
         # Verifica se o arquivo correspondente existe no diretório backup
-        if [ -f "bak_file" ]; then
+        if [ -f "$bak_file" ]; then
             src_md5=$(get_md5 "$src_file")
             bak_md5=$(get_md5 "$bak_file")
 

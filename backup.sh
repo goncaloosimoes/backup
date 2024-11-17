@@ -46,7 +46,10 @@ while getopts ":cb:r:" opt; do
         c) CHECKING=true;;
         b) IGNORE_FILE="$OPTARG"
             # Carrega a lista de arquivos a serem ignorados
-            load_ignore_paths;;
+            load_ignore_paths
+            echo "Conteúdo de IGNORE_FILE: $IGNORE_FILE"
+            echo "Caminhos a serem ignorados:"
+            printf '%s\n' "${ignore_paths[@]}";;
         r) REGEX="$OPTARG"
             # Validação da expressão regular
             if [[ -z "$REGEX" ]]; then
@@ -107,7 +110,7 @@ copy_item() {
     echo "cp -a \"$src_item\" \"$dest_item\""   # Exibe o comando de cópia no terminal, para monitoramento
 
     # Verifica se o item deve ser ignorado ou se não corresponde ao filtro de regex
-    if should_ignore "$src_item" || [[ ! -n "$REGEX" && ! "$(basename "$src_item")" =~ $REGEX ]]; then
+    if should_ignore "$src_item" || [[ -n "$REGEX" && ! "$(basename "$src_item")" =~ $REGEX ]]; then
         echo "Ignoring $src_item due to regex or ignore file"
         return
     fi
