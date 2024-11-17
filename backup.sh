@@ -11,6 +11,8 @@ CHECKING=false
 IGNORE_FILE=""
 REGEX=""
 
+export LC_ALL=C
+
 # Função que carrega a lista de arquivos a serem ignorados
 load_ignore_paths() {
     if [ -f "$IGNORE_FILE" ]; then
