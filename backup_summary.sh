@@ -241,7 +241,14 @@ while read -r item; do
         fi
     elif [ -f "$item" ]; then
         # Se o item é um arquivo chama a função copy_item que já regula se é uma atualização ou cópia
-        copy_item "$item" "$backup_item"
+        # Executa a cópia apenas se o item em src for mais recente que o item em backup
+        if [ "$item" -nt "$backup_item" ];then 
+            copy_item "$item" "$backup_item"
+        elif ! cmp -s "$item" "$backup_item"; then
+            # Caso o item em backup seja mais recente lançamos um warning
+            echo "WARNING: backup entry $backup_item is newer than $item; Should not happen"
+            ((warnings++))
+        fi
     fi
 done < <(find "$dir_trabalho" -mindepth 1)
 

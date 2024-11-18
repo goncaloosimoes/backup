@@ -209,7 +209,7 @@ while read -r item; do
             # Atualiza apenas se o arquivo de origem for mais recente
             if [ "$item" -nt "$backup_item" ]; then
                 copy_item "$item" "$backup_item"
-            else
+            elif ! cmp -s "$item" "$backup_item"; then
                 echo "WARNING: backup entry $backup_item is newer than $item; Should not happen"
             fi
         else
