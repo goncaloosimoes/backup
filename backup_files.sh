@@ -74,40 +74,48 @@ copy_file() {
     # Caminho para o ficheiro de destino
     local dest_file="$2"
 
-    # Exibe sempre o comando no terminal
+    # Exibe o comando que será executado
     echo "cp -a \"$src_file\" \"$dest_file\""
-    
-    # Verifica se o arquivo não existe no backup ou se o arquivo de origem é mais recente
-    if [ "$CHECKING" = false ]; then
-        if cp -a "$src_file" "$dest_file"; then
-            # Verifica se o arquivo foi realmente copiado ou atualizado
-            if [ ! -f "$dest_file" ] || [ "$src_file" -nt "$dest_file" ]; then
-                ((updated++))  # Contagem de atualizações
-            else
-                ((copied++))  # Contagem de cópias (novos arquivos)
-            fi
 
-            # Adiciona o tamanho do arquivo ao total de bytes copiados
-            file_size=$(stat -c%s "$src_file" 2>/dev/null || stat -f%z "$src_file") # Compatibilidade para obter tamanho do ficheiro
-            ((total_bytes_copied+=file_size))  # Soma ao total de bytes copiados
-        else
-            # Se ocorrer um erro na cópia
-            echo "ERROR: failed to copy $src_file to $dest_file" >&2
-            ((errors++))  # Incrementa o contador de erros
+    # Verifica se o modo CHECKING está desativado
+    if [ "$CHECKING" = false ]; then
+        # Verifica se o arquivo de destino não existe ou se está desatualizado
+        if [ ! -e "$dest_file" ]; then
+            # Caso seja uma cópia de novo arquivo
+            if cp -a "$src_file" "$dest_file"; then
+                ((copied++))  # Incrementa contador de cópias
+                
+                # Calcula e adiciona o tamanho do arquivo copiado
+                file_size=$(stat -c%s "$src_file" 2>/dev/null || stat -f%z "$src_file") # Compatível com diferentes SOs
+                ((total_bytes_copied+=file_size))  # Soma ao total de bytes copiados
+            else
+                # Se ocorrer um erro na cópia
+                echo "ERROR: failed to copy $src_file to $dest_file" >&2
+                ((errors++))  # Incrementa contador de erros
+            fi
+        elif [ "$src_file" -nt "$dest_file" ]; then
+            # Caso seja uma atualização
+            if cp -a "$src_file" "$dest_file"; then
+                ((updated++))  # Incrementa contador de atualizações
+            else
+                # Se ocorrer um erro na atualização
+                echo "ERROR: failed to update $src_file to $dest_file" >&2
+                ((errors++))  # Incrementa contador de erros
+            fi
         fi
     else
-        # No modo de verificação, apenas incrementa as contagens
-        if [ ! -f "$dest_file" ]; then
-            ((copied++))  # Contagem de cópias no modo de verificação
-        else
-            ((updated++))  # Contagem de atualizações no modo de verificação
+        # Simulação no modo CHECKING
+        if [ ! -e "$dest_file" ]; then
+            ((copied++))  # Incrementa contador de cópias (modo CHECKING)
+            # Calcula o tamanho do arquivo copiado
+            file_size=$(stat -c%s "$src_file" 2>/dev/null || stat -f%z "$src_file")
+            ((total_bytes_copied+=file_size))  # Soma ao total de bytes copiados
+        elif [ "$src_file" -nt "$dest_file" ]; then
+            ((updated++))  # Incrementa contador de atualizações (modo CHECKING)
         fi
-
-        # Adiciona o tamanho do arquivo ao total de bytes copiados (mesmo no modo de verificação)
-        file_size=$(stat -c%s "$src_file" 2>/dev/null || stat -f%z "$src_file") # Compatibilidade para obter tamanho
-        ((total_bytes_copied+=file_size))  # Soma ao total de bytes copiados
     fi
 }
+
 
 # Função para apagar um ficheiro da diretoria backup se ele já não existir na diretoria de trabalho
 delete_file() {
@@ -155,7 +163,6 @@ for file in "$dir_trabalho"/*; do
             # Atualiza apenas se o ficheiro de origem for mais recente 
             if [ "$file" -nt "$backup_file" ] || [ ! -e "$backup_file" ]; then
                 copy_file "$file" "$backup_file"
-                ((updated++))  # Incrementa o contador de atualizações
             elif [ "$backup_file" -nt "$file" ]; then
                 echo "WARNING: backup entry $backup_file is newer than $file; Should not happen"
                 ((warnings++))  # Incrementa o contador de avisos
