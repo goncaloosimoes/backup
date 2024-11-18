@@ -247,14 +247,14 @@ while read -r item; do
                 
             fi
         fi
-    echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
+    echo "While backing up $item: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
     # Reseta os contadores
-                errors=0
-                warnings=0
-                updated=0
-                copied=0
-                total_bytes_copied=0
-                total_bytes_deleted=0
+    errors=0
+    warnings=0
+    updated=0
+    copied=0
+    total_bytes_copied=0
+    total_bytes_deleted=0
     elif [ -f "$item" ]; then
         # Se o item é um arquivo, chama a função copy_item que regula se é uma atualização ou cópia
         # Executa a cópia apenas se o item em src for mais recente que o item em backup
@@ -293,4 +293,4 @@ if [ -d "$dir_backup" ]; then
 fi
 
 # Exibe o resumo final
-# echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
+echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
