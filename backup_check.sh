@@ -12,6 +12,7 @@ check_directory() {
     return 0  # Diretório existe
 }
 
+# Verifica se os diretórios existem
 check_directory "$dir_trabalho"
 if [[ $? -eq 1 ]]; then
     echo "ERROR: '$dir_trabalho' does not exist or it is not a directory"
@@ -29,20 +30,25 @@ get_md5() {
     md5sum "$1" | cut -d' ' -f1
 }
 
-for src_file in "$dir_trabalho"/*; do
-    if [ -f "$src_file" ]; then
-        filename=$(basename "$src_file")
-        bak_file="$dir_backup/$filename"
+# Verifica arquivos no diretório de trabalho
+find "$dir_trabalho" -type f | while read -r src_file; do
+    # Caminho relativo do arquivo
+    relative_path="${src_file#$dir_trabalho/}"
+    bak_file="$dir_backup/$relative_path"
 
-        # Verifica se o arquivo correspondente existe no diretório backup
-        if [ -f "$bak_file" ]; then
-            src_md5=$(get_md5 "$src_file")
-            bak_md5=$(get_md5 "$bak_file")
+    # Garante que o subdiretório correspondente exista no backup
+    if [ ! -d "$(dirname "$bak_file")" ]; then
+        mkdir -p "$(dirname "$bak_file")"
+    fi
 
-            # Compara os hashes MD5
-            if [ "$src_md5" != "$bak_md5" ]; then
-                echo "$src_file $bak_file differ."
-            fi
+    # Verifica se o arquivo existe no backup
+    if [ -f "$bak_file" ]; then
+        src_md5=$(get_md5 "$src_file")
+        bak_md5=$(get_md5 "$bak_file")
+
+        # Compara os hashes MD5
+        if [ "$src_md5" != "$bak_md5" ]; then
+            echo "$src_file $bak_file differ."
         fi
     fi
 done
