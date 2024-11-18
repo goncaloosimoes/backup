@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Função de ajuda de uso
+export LC_ALL=C
+
 usage() {
     echo "Usage: $0 [-c] [-b tfile] [-r regexpr] <dir_trabalho> <dir_backup>"
     exit 1
@@ -11,21 +12,34 @@ CHECKING=false
 IGNORE_FILE=""
 REGEX=""
 
-export LC_ALL=C
-
 # Função que carrega a lista de arquivos a serem ignorados
 load_ignore_paths() {
     if [ -f "$IGNORE_FILE" ]; then
-        mapfile -t ignore_paths < "$IGNORE_FILE"
+        mapfile -t ignore_paths < "$IGNORE_FILE"  # Carrega os caminhos em um array
+        echo "Ignore paths loaded: ${ignore_paths[*]}"
+    else
+        echo "WARNING: Ignore file not found: $IGNORE_FILE"
+        ignore_paths=()
     fi
 }
 
 # Função para verificar se um item deve ser ignorado
 should_ignore() {
     local path="$1"
+    local relative_path="${path#$dir_trabalho/}"  # Extrai o caminho relativo
+
+    # Se uma regex for fornecida, verifica se o ficheiro corresponde à regex
+    if [ -f "$path" ]; then # Apenas compara com o regex se for um ficheiro
+        if [[ -n "$REGEX" && ! "$relative_path" =~ $REGEX ]]; then
+            echo "Ignoring $relative_path due to regex match"
+            return 0  # Ignorar o item
+        fi
+    fi
+
     for ignore in "${ignore_paths[@]}"; do
-        if [[ "$path" == "$ignore" ]]; then
-            return 0  # Ignorar
+        if [[ "$path" == "$ignore" || "$relative_path" == "$ignore" ]]; then
+            echo "Ignoring $relative_path due to mention in $IGNORE_FILE"
+            return 0 # Ignorar o item
         fi
     done
     return 1  # Não ignorar
@@ -46,17 +60,13 @@ while getopts ":cb:r:" opt; do
         c) CHECKING=true;;
         b) IGNORE_FILE="$OPTARG"
             # Carrega a lista de arquivos a serem ignorados
-            load_ignore_paths
-            echo "Conteúdo de IGNORE_FILE: $IGNORE_FILE"
-            echo "Caminhos a serem ignorados:"
-            printf '%s\n' "${ignore_paths[@]}";;
+            load_ignore_paths;;
         r) REGEX="$OPTARG"
             # Validação da expressão regular
             if [[ -z "$REGEX" ]]; then
                 echo "ERROR: Regex is not defined"
                 exit 1
             fi;;
-
         ?) usage;;
     esac
 done
@@ -78,7 +88,6 @@ dir_backup="${args[1]}"
 # Verifica se dir_backup está dentro de dir_trabalho
 if [[ "$dir_backup" == "$dir_trabalho"* ]]; then
     echo "ERROR: The backup directory ($dir_backup) cannot be inside the working directory ($dir_trabalho)."
-    ((errors++))
     exit 1
 fi
 
@@ -103,83 +112,78 @@ if [[ $? -eq 1 ]]; then
     fi
 fi
 
-copy_item() {   
+copy_item() {
     local src_item="$1"                 # Caminho do arquivo de origem
     local dest_item="$2"                # Caminho do arquivo de destino
 
-    echo "cp -a \"$src_item\" \"$dest_item\""   # Exibe o comando de cópia no terminal, para monitoramento
-
-    # Verifica se o item deve ser ignorado ou se não corresponde ao filtro de regex
-    if should_ignore "$src_item" || [[ -n "$REGEX" && ! "$(basename "$src_item")" =~ $REGEX ]]; then
-        echo "Ignoring $src_item due to regex or ignore file"
-        return
+    if [ ! -e "$dest_item" ]; then
+        echo "cp -a \"$src_item\" \"$dest_item\""
     fi
 
     # Verifica se o item de origem é um diretório
     if [ -d "$src_item" ]; then
-        # Verifica se o diretório backup correspondente não existe
-        if [ ! -d "$dest_item" ]; then
-            echo "mkdir -p $dest_item"
-            # Se não estiver no modo CHECKING, cria o diretório de destino
-            if [ "$CHECKING" = false ]; then
-                mkdir -p "$dest_item"
-            fi
+        # Cria o diretório de destino, se necessário
+        echo "mkdir -p $dest_item"
+        if [ "$CHECKING" = false ]; then
+            mkdir -p "$dest_item"
         fi
     else    # Se for um ficheiro, verifica se o item de destino já existe
+        item_size=$(stat -c%s "$src_item" 2>/dev/null || stat -f%z "$src_item")
+        
         if [ ! -e "$dest_item" ]; then
             # Caso o arquivo de destino não exista, considera como um novo arquivo copiado
             if [ "$CHECKING" = false ]; then
                 if cp -a "$src_item" "$dest_item"; then
-                    # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
-                    item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
+                    # Contagem removida
                 else
                     # Se ocorrer um erro na cópia
                     echo "ERROR: failed to copy $src_item to $dest_item" >&2
                 fi
-            else
-                # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
-                item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
             fi
         elif [ "$src_item" -nt "$dest_item" ]; then
             # Caso o arquivo de destino exista, mas o arquivo de origem seja mais recente, considera como atualizado
             if [ "$CHECKING" = false ]; then
                 if cp -a "$src_item" "$dest_item"; then
-                    # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
-                    item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
+                    # Contagem removida
                 else
                     echo "ERROR: failed to update $src_item to $dest_item" >&2
                 fi
-            else
-                # Simula a atualização e calcula o tamanho do arquivo
-                # Anotamos o tamanho do ficheiro antes de apagá-lo (-c%s para linux e %f%z para macOS)
-                item_size=$(stat -c%s "$dest_item" 2>/dev/null || stat -f%z "$dest_item")
             fi
         fi
     fi
 }
 
 delete_item() {
-    # Caminho para o ficheiro ou diretório de destino que desejamos apagar
     local dest="$1"
+    local item_size=0
 
-    if [ -e "$dest" ]; then  # Apenas processa se o caminho existir
-        # Determina o tamanho do arquivo/diretório antes de apagar
+    if [ -e "$dest" ]; then
         if [ -f "$dest" ]; then
-            item_size=$(stat -c%s "$dest" 2>/dev/null || stat -f%z "$dest")  # Linux ou macOS
+            # Se for um arquivo, soma o tamanho e apaga
+            item_size=$(stat -c %s "$dest" 2>/dev/null || stat -f %z "$dest")
             rm_command="rm \"$dest\""
         elif [ -d "$dest" ]; then
-            item_size=$(du -sb "$dest" 2>/dev/null | cut -f1 || du -sk "$dest" | cut -f1)
+            # Se for um diretório, iterar sobre todos os itens dentro dele
+            for file in "$dest"/*; do
+                if [ -f "$file" ]; then
+                    # Soma o tamanho e conta cada arquivo
+                    file_size=$(stat -c %s "$file" 2>/dev/null || stat -f %z "$file")
+                elif [ -d "$file" ]; then
+                    # Conta o diretório como item (se necessário)
+                    # Contagem removida
+                fi
+            done
+            
+            # Finalmente, apaga o diretório
             rm_command="rm -r \"$dest\""
         else
             echo "WARNING: '$dest' is not a file or a directory?"
             return
         fi
 
-        # Print do comando de remoção do item consoante a sua natureza (ficheiro/diretoria)
+        # Executa o comando de remoção
         echo "$rm_command"
-
         if [ "$CHECKING" = false ]; then
-            # Apagar o arquivo ou diretório usando a string armazenada anteriormente
             if ! eval $rm_command; then
                 echo "ERROR: Failed to delete $dest" >&2
             fi
@@ -193,47 +197,54 @@ shopt -s dotglob  # Habilita o glob para trabalhar também com arquivos ocultos
 
 # Loop recursivo pelos itens no diretório de trabalho
 while read -r item; do
+    # Verifica se o item deve ser ignorado
+    if should_ignore "$item"; then
+        echo "Ignoring $item based on ignore file"
+        continue  # Pula o item
+    fi
+
     # Caminho relativo no diretório de trabalho
     relative_path="${item#$dir_trabalho/}"
-    backup_item="$dir_backup/$relative_path"  # Alterado de backup_file para backup_item
+    backup_item="$dir_backup/$relative_path"
 
     if [ -d "$item" ]; then
         # Se o item é um diretório, cria o diretório correspondente no backup se ele ainda não existir
         if [ ! -d "$backup_item" ]; then
-            mkdir -p "$backup_item"
             echo "mkdir -p $backup_item"
+            if [ "$CHECKING" = false ]; then
+                mkdir -p "$backup_item"
+            fi
         fi
     elif [ -f "$item" ]; then
-        # Se o item é um arquivo
-        if [ -f "$backup_item" ]; then
-            # Atualiza apenas se o arquivo de origem for mais recente
-            if [ "$item" -nt "$backup_item" ]; then
-                copy_item "$item" "$backup_item"
-            elif ! cmp -s "$item" "$backup_item"; then
-                echo "WARNING: backup entry $backup_item is newer than $item; Should not happen"
-            fi
-        else
-            # Se o arquivo não existe no backup, é copiado
+        # Se o item é um arquivo, chama a função copy_item que regula se é uma atualização ou cópia
+        # Executa a cópia apenas se o item em src for mais recente que o item em backup
+        if [ "$item" -nt "$backup_item" ]; then 
             copy_item "$item" "$backup_item"
+        elif ! cmp -s "$item" "$backup_item"; then
+            # Caso o item em backup seja mais recente, lança um warning
+            echo "WARNING: backup entry $backup_item is newer than $item; Should not happen"
         fi
     fi
 done < <(find "$dir_trabalho" -mindepth 1)
 
-# Loop recursivo para verificar arquivos presentes no backup
-while read -r backup_item; do
-    # Obtém o caminho relativo ao backup para mapear ao diretório de trabalho
-    relative_path="${backup_item#$dir_backup/}"
-    item="$dir_trabalho/$relative_path"
 
-    if [ -f "$backup_item" ]; then
-        # Verifica se o arquivo correspondente no diretório de trabalho existe
-        if [ ! -e "$item" ]; then
-            delete_item "$backup_item"  # Apaga o arquivo se ele não existir no dir_trabalho
+if [ -d "$dir_backup" ]; then
+    # Loop recursivo para verificar arquivos presentes no backup, se o diretório backup existir
+    while read -r backup_item; do
+        # Obtém o caminho relativo ao backup para mapear ao diretório de trabalho
+        relative_path="${backup_item#$dir_backup/}"
+        item="$dir_trabalho/$relative_path"
+
+        if [ -f "$backup_item" ]; then
+            # Verifica se o arquivo correspondente no diretório de trabalho existe
+            if [ ! -e "$item" ]; then
+                delete_item "$backup_item"  # Apaga o arquivo se ele não existir no dir_trabalho
+            fi
+        elif [ -d "$backup_item" ]; then
+            # Verifica se o diretório correspondente no diretório de trabalho existe
+            if [ ! -d "$item" ]; then
+                delete_item "$backup_item"  # Apaga o diretório se não existir no dir_trabalho
+            fi
         fi
-    elif [ -d "$backup_item" ]; then
-        # Verifica se o diretório correspondente no diretório de trabalho existe
-        if [ ! -d "$item" ]; then
-            delete_item "$backup_item"  # Apaga o diretório se não existir no dir_trabalho
-        fi
-    fi
-done < <(find "$dir_backup" -mindepth 1)
+    done < <(find "$dir_backup" -mindepth 1)
+fi

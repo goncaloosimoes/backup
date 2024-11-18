@@ -27,7 +27,7 @@ REGEX=""
 load_ignore_paths() {
     if [ -f "$IGNORE_FILE" ]; then
         mapfile -t ignore_paths < "$IGNORE_FILE"  # Carrega os caminhos em um array
-        echo "Ignore paths loaded: ${ignore_paths[*]}"
+        # echo "Ignore paths loaded: ${ignore_paths[*]}"
     else
         echo "WARNING: Ignore file not found: $IGNORE_FILE"
         ((warnings++))
@@ -35,18 +35,23 @@ load_ignore_paths() {
     fi
 }
 
-
 # Função para verificar se um item deve ser ignorado
 should_ignore() {
     local path="$1"
     local relative_path="${path#$dir_trabalho/}"  # Extrai o caminho relativo
 
-    for ignore in "${ignore_paths[@]}"; do
-        if [[ "$path" == "$ignore" ]]; then
-            return 0 # Ignorar o item
-        fi
-        if [[ "$relative_path" == "$ignore" ]]; then
+    # Se uma regex for fornecida, verifica se o ficheiro corresponde à regex
+    if [ -f "$path" ]; then # Apenas compara com o regex se for um ficheiro
+        if [[ -n "$REGEX" && ! "$relative_path" =~ $REGEX ]]; then
+            echo "Ignoring $relative_path due to regex mismatch"
             return 0  # Ignorar o item
+        fi
+    fi
+
+    for ignore in "${ignore_paths[@]}"; do
+        if [[ "$path" == "$ignore" || "$relative_path" == "$ignore" ]]; then
+            echo "Ignoring $relative_path due to mention in $IGNORE_FILE"
+            return 0 # Ignorar o item
         fi
     done
     return 1  # Não ignorar
@@ -72,12 +77,6 @@ while getopts ":cb:r:" opt; do
             # Validação da expressão regular
             if [[ -z "$REGEX" ]]; then
                 echo "ERROR: Regex is not defined"
-                ((errors++))
-                exit 1
-            fi
-            echo "" | grep -E "$REGEX" >/dev/null 2>&1
-            if [[ $? -ne 0 ]]; then
-                echo "ERROR:'$REGEX' is not a valid regex"
                 ((errors++))
                 exit 1
             fi;;
@@ -232,7 +231,6 @@ shopt -s dotglob  # Habilita o glob para trabalhar também com arquivos ocultos
 while read -r item; do
     # Verifica se o item deve ser ignorado
     if should_ignore "$item"; then
-        echo "Ignoring $item based on ignore file"
         continue  # Pula o item
     fi
 
@@ -246,8 +244,17 @@ while read -r item; do
             echo "mkdir -p $backup_item"
             if [ "$CHECKING" = false ]; then
                 mkdir -p "$backup_item"
+                
             fi
         fi
+    echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
+    # Reseta os contadores
+                errors=0
+                warnings=0
+                updated=0
+                copied=0
+                total_bytes_copied=0
+                total_bytes_deleted=0
     elif [ -f "$item" ]; then
         # Se o item é um arquivo, chama a função copy_item que regula se é uma atualização ou cópia
         # Executa a cópia apenas se o item em src for mais recente que o item em backup
@@ -258,7 +265,9 @@ while read -r item; do
             echo "WARNING: backup entry $backup_item is newer than $item; Should not happen"
             ((warnings++))
         fi
+        
     fi
+
 done < <(find "$dir_trabalho" -mindepth 1)
 
 
@@ -284,4 +293,4 @@ if [ -d "$dir_backup" ]; then
 fi
 
 # Exibe o resumo final
-echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
+# echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
