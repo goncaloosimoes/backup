@@ -3,6 +3,12 @@
 dir_trabalho=$1
 dir_backup=$2
 
+# Função de ajuda de uso
+usage() {
+    echo "Usage: $0 <dir_trabalho> <dir_backup>"
+    exit 1
+}
+
 # Função para verificar se um diretório existe e é válido
 check_directory() {
     local dir="$1"
