@@ -81,7 +81,7 @@ shift $((OPTIND - 1))
 if [ "$#" -lt 2 ]; then
     echo "ERROR: need at least 2 arguments: working directory and backup directory"
     ((errors++))
-    exit 1
+    usage
 fi
 
 # Normalização e atribuição dos diretórios dir_trabalho e dir_backup
