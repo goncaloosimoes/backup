@@ -163,14 +163,12 @@ copy_item() {
             if [ "$CHECKING" = false ]; then
                 if cp -a "$src_item" "$dest_item"; then
                     ((updated++))  # Incrementa contador de arquivos atualizados
-                    ((total_bytes_copied+=item_size))
                 else
                     echo "ERROR: failed to update $src_item to $dest_item" >&2
                     ((errors++))  # Incrementa contador de erros
                 fi
             else
                 ((updated++))  # Incrementa contador de arquivos atualizados
-                ((total_bytes_copied+=item_size)) # Simula a atualização e calcula o tamanho do arquivo
             fi
         fi
     fi
