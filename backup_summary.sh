@@ -26,16 +26,24 @@ REGEX=""
 # Função que carrega a lista de arquivos a serem ignorados
 load_ignore_paths() {
     if [ -f "$IGNORE_FILE" ]; then
-        mapfile -t ignore_paths < "$IGNORE_FILE"
+        mapfile -t ignore_paths < "$IGNORE_FILE"  # Carrega os caminhos em um array
+        echo "Ignore paths loaded: ${ignore_paths[*]}"
+    else
+        echo "WARNING: Ignore file not found: $IGNORE_FILE"
+        ((warnings++))
+        ignore_paths=()
     fi
 }
+
 
 # Função para verificar se um item deve ser ignorado
 should_ignore() {
     local path="$1"
+    local relative_path="${path#$dir_trabalho/}"  # Extrai o caminho relativo
+
     for ignore in "${ignore_paths[@]}"; do
-        if [[ "$path" == "$ignore" ]]; then
-            return 0  # Ignorar
+        if [[ "$relative_path" == "$ignore" ]]; then
+            return 0  # Ignorar o item
         fi
     done
     return 1  # Não ignorar
@@ -125,12 +133,6 @@ copy_item() {
 
     if [ ! -e "$dest_item" ]; then
         echo "cp -a \"$src_item\" \"$dest_item\""
-    fi
-
-    # Verifica se o item deve ser ignorado ou se não corresponde ao filtro de regex
-    if should_ignore "$src_item" || [[ -n "$REGEX" && ! "$(basename "$src_item")" =~ $REGEX ]]; then
-        echo "Ignoring $src_item due to regex or ignore file"
-        return
     fi
 
     # Verifica se o item de origem é um diretório
@@ -225,9 +227,15 @@ shopt -s dotglob  # Habilita o glob para trabalhar também com arquivos ocultos
 
 # Loop recursivo pelos itens no diretório de trabalho
 while read -r item; do
+    # Verifica se o item deve ser ignorado
+    if should_ignore "$item"; then
+        echo "Ignoring $item based on ignore file"
+        continue  # Pula o item
+    fi
+
     # Caminho relativo no diretório de trabalho
     relative_path="${item#$dir_trabalho/}"
-    backup_item="$dir_backup/$relative_path"  # Alterado de backup_file para backup_item
+    backup_item="$dir_backup/$relative_path"
 
     if [ -d "$item" ]; then
         # Se o item é um diretório, cria o diretório correspondente no backup se ele ainda não existir
@@ -238,12 +246,12 @@ while read -r item; do
             fi
         fi
     elif [ -f "$item" ]; then
-        # Se o item é um arquivo chama a função copy_item que já regula se é uma atualização ou cópia
+        # Se o item é um arquivo, chama a função copy_item que regula se é uma atualização ou cópia
         # Executa a cópia apenas se o item em src for mais recente que o item em backup
-        if [ "$item" -nt "$backup_item" ];then 
+        if [ "$item" -nt "$backup_item" ]; then 
             copy_item "$item" "$backup_item"
         elif ! cmp -s "$item" "$backup_item"; then
-            # Caso o item em backup seja mais recente lançamos um warning
+            # Caso o item em backup seja mais recente, lança um warning
             echo "WARNING: backup entry $backup_item is newer than $item; Should not happen"
             ((warnings++))
         fi
