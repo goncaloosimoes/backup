@@ -9,6 +9,13 @@ usage() {
     exit 1
 }
 
+# Valida se o número de argumentos é adequado
+if [ "$#" -lt 2 ]; then
+    echo "ERROR: need at least 2 arguments: working directory and backup directory"
+    ((errors++))
+    usage
+fi
+
 # Função para verificar se um diretório existe e é válido
 check_directory() {
     local dir="$1"
@@ -22,13 +29,13 @@ check_directory() {
 check_directory "$dir_trabalho"
 if [[ $? -eq 1 ]]; then
     echo "ERROR: '$dir_trabalho' does not exist or it is not a directory"
-    exit 1
+    usage
 fi
 
 check_directory "$dir_backup"
 if [[ $? -eq 1 ]]; then
     echo "ERROR: '$dir_backup' does not exist or it is not a directory"
-    exit 1
+    usage
 fi
 
 # Função para calcular o MD5 de um arquivo
