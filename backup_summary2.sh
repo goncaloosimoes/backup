@@ -227,70 +227,59 @@ delete_item() {
 shopt -s nullglob
 shopt -s dotglob  # Habilita o glob para trabalhar também com arquivos ocultos
 
-# Loop recursivo pelos itens no diretório de trabalho
-while read -r item; do
-    # Verifica se o item deve ser ignorado
-    if should_ignore "$item"; then
-        continue  # Pula o item
-    fi
+# Função para processar o diretório e mostrar apenas o resumo do diretório atual
+process_directory() {
+    local dir="$1"
+    
+    # Habilita a expansão para arquivos ocultos (arquivos que começam com '.')
+    shopt -s dotglob
+    
+    # Inicializa os contadores para o diretório atual
+    local current_copied=0
+    local current_updated=0
+    local current_deleted=0
+    local current_errors=0
+    local current_warnings=0
+    local current_bytes_copied=0
+    local current_bytes_deleted=0
 
-    # Caminho relativo no diretório de trabalho
-    relative_path="${item#$dir_trabalho/}"
-    backup_item="$dir_backup/$relative_path"
-
-    if [ -d "$item" ]; then
-        # Se o item é um diretório, cria o diretório correspondente no backup se ele ainda não existir
-        if [ ! -d "$backup_item" ]; then
-            echo "mkdir -p $backup_item"
-            if [ "$CHECKING" = false ]; then
-                mkdir -p "$backup_item"
-                
-            fi
-        fi
-    echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
-    # Reseta os contadores
-                errors=0
-                warnings=0
-                updated=0
-                copied=0
-                total_bytes_copied=0
-                total_bytes_deleted=0
-    elif [ ! -d "$item" ]; then
-        # Se o item é um arquivo, chama a função copy_item que regula se é uma atualização ou cópia
-        # Executa a cópia apenas se o item em src for mais recente que o item em backup
-        if [ "$item" -nt "$backup_item" ]; then 
-            copy_item "$item" "$backup_item"
-        elif ! cmp -s "$item" "$backup_item"; then
-            # Caso o item em backup seja mais recente, lança um warning
-            echo "WARNING: backup entry $backup_item is newer than $item; Should not happen"
-            ((warnings++))
+    # Itera sobre os itens dentro do diretório, agora incluindo arquivos ocultos
+    for item in "$dir"/*; do
+        if should_ignore "$item"; then
+            continue
         fi
         
-    fi
+        relative_path="${item#$dir_trabalho/}"
+        backup_item="$dir_backup/$relative_path"
+        
+        if [ -d "$item" ]; then
+            process_directory "$item"  # Processa subdiretórios recursivamente
+        else
+            copy_item "$item" "$backup_item"  # Copia arquivos do diretório atual
 
-done < <(find "$dir_trabalho" -mindepth 1)
+            # Atualiza os contadores locais do diretório atual
+            current_copied=$((current_copied + copied))
+            current_updated=$((current_updated + updated))
+            current_deleted=$((current_deleted + deleted))
+            current_errors=$((current_errors + errors))
+            current_warnings=$((current_warnings + warnings))
+            current_bytes_copied=$((current_bytes_copied + total_bytes_copied))
+            current_bytes_deleted=$((current_bytes_deleted + total_bytes_deleted))
 
-
-if [ -d "$dir_backup" ]; then
-    # Loop recursivo para verificar arquivos presentes no backup, se o diretório backup existir
-    while read -r backup_item; do
-        # Obtém o caminho relativo ao backup para mapear ao diretório de trabalho
-        relative_path="${backup_item#$dir_backup/}"
-        item="$dir_trabalho/$relative_path"
-
-        if [ -f "$backup_item" ]; then
-            # Verifica se o arquivo correspondente no diretório de trabalho existe
-            if [ ! -e "$item" ]; then
-                delete_item "$backup_item"  # Apaga o arquivo se ele não existir no dir_trabalho
-            fi
-        elif [ -d "$backup_item" ]; then
-            # Verifica se o diretório correspondente no diretório de trabalho existe
-            if [ ! -d "$item" ]; then
-                delete_item "$backup_item"  # Apaga o diretório se não existir no dir_trabalho
-            fi
+            # Resetando os contadores globais para o próximo arquivo
+            copied=0
+            updated=0
+            deleted=0
+            errors=0
+            warnings=0
+            total_bytes_copied=0
+            total_bytes_deleted=0
         fi
-    done < <(find "$dir_backup" -mindepth 1)
-fi
+    done
 
-# Exibe o resumo final
-# echo "While backing up $dir_trabalho: $errors Errors; $warnings Warnings; $updated Updated; $copied Copied ($total_bytes_copied B); $deleted deleted ($total_bytes_deleted B)"
+    # Exibe o resumo para o diretório atual após processar todos os itens
+    echo "While backuping $dir: $current_errors Errors; $current_warnings Warnings; $current_updated Updated; $current_copied Copied ($current_bytes_copied"B"); $current_deleted Deleted ($current_bytes_deleted"B")"
+}
+
+# Chama a função para processar o diretório de trabalho
+process_directory "$dir_trabalho"
