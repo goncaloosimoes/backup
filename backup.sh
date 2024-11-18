@@ -128,14 +128,10 @@ copy_item() {
             mkdir -p "$dest_item"
         fi
     else    # Se for um ficheiro, verifica se o item de destino já existe
-        item_size=$(stat -c%s "$src_item" 2>/dev/null || stat -f%z "$src_item")
-        
         if [ ! -e "$dest_item" ]; then
             # Caso o arquivo de destino não exista, considera como um novo arquivo copiado
             if [ "$CHECKING" = false ]; then
-                if cp -a "$src_item" "$dest_item"; then
-                    # Contagem removida
-                else
+                if ! cp -a "$src_item" "$dest_item"; then
                     # Se ocorrer um erro na cópia
                     echo "ERROR: failed to copy $src_item to $dest_item" >&2
                 fi
@@ -143,9 +139,7 @@ copy_item() {
         elif [ "$src_item" -nt "$dest_item" ]; then
             # Caso o arquivo de destino exista, mas o arquivo de origem seja mais recente, considera como atualizado
             if [ "$CHECKING" = false ]; then
-                if cp -a "$src_item" "$dest_item"; then
-                    # Contagem removida
-                else
+                if ! cp -a "$src_item" "$dest_item"; then
                     echo "ERROR: failed to update $src_item to $dest_item" >&2
                 fi
             fi
@@ -155,26 +149,11 @@ copy_item() {
 
 delete_item() {
     local dest="$1"
-    local item_size=0
 
     if [ -e "$dest" ]; then
         if [ -f "$dest" ]; then
-            # Se for um arquivo, soma o tamanho e apaga
-            item_size=$(stat -c %s "$dest" 2>/dev/null || stat -f %z "$dest")
             rm_command="rm \"$dest\""
         elif [ -d "$dest" ]; then
-            # Se for um diretório, iterar sobre todos os itens dentro dele
-            for file in "$dest"/*; do
-                if [ -f "$file" ]; then
-                    # Soma o tamanho e conta cada arquivo
-                    file_size=$(stat -c %s "$file" 2>/dev/null || stat -f %z "$file")
-                elif [ -d "$file" ]; then
-                    # Conta o diretório como item (se necessário)
-                    # Contagem removida
-                fi
-            done
-            
-            # Finalmente, apaga o diretório
             rm_command="rm -r \"$dest\""
         else
             echo "WARNING: '$dest' is not a file or a directory?"
