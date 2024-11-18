@@ -42,6 +42,9 @@ should_ignore() {
     local relative_path="${path#$dir_trabalho/}"  # Extrai o caminho relativo
 
     for ignore in "${ignore_paths[@]}"; do
+        if [[ "$path" == "$ignore" ]]; then
+            return 0 # Ignorar o item
+        fi
         if [[ "$relative_path" == "$ignore" ]]; then
             return 0  # Ignorar o item
         fi
